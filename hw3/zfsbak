@@ -1,0 +1,158 @@
+#!/usr/local/bin/bash
+
+usage() {
+    echo "Usage:"
+    echo "- create: zfsbak DATASET [ROTATION_CNT]"
+    echo "- list: zfsbak -l|--list [DATASET|ID|DATASET ID]"
+    echo "- delete: zfsbak -d|--delete [DATASET|ID|DATASET ID...]"
+    echo "- export: zfsbak -e|--export DATASET [ID]"
+    echo "- import: zfsbak -i|--import FILENAME DATASET"
+}
+
+get_snapshot_table() {
+    zfs list -t snapshot -s creation -o name $1 | sed '1d'
+}
+
+get_snapshot_table_id() {
+  table="$(get_snapshot_table $1 2>/dev/null)"
+  printf "${table}" | awk 'BEGIN {id=1;\
+                        print "ID\tDATASET\t\tTIME"}
+                        {split($0, name, "@");\
+                        print id "\t" name[1] "\t" name[2];\
+                        id++}'
+}
+
+get_time() {
+  date +"%Y-%m-%d-%H:%M:%S" 
+}
+
+list() {
+    case $# in
+    0)
+        echo "$(get_snapshot_table_id)"
+        ;;
+    1)
+        if [[ "$1" =~ ^[0-9]+$ ]]; then
+            table="$(get_snapshot_table_id)"
+            echo "${table}" | sed -n "1p; $(($1 + 1))p"
+        else
+            echo "$(get_snapshot_table_id $1)"
+        fi
+        ;;
+    2)
+        table="$(get_snapshot_table_id $1)"
+        echo "${table}" | sed -n "1p; $(($2 + 1))p"
+        ;;
+    *)
+        usage
+        ;;
+    esac
+}
+
+delete() {
+  case $# in
+    0)
+      names="$(get_snapshot_table)"
+      ;;
+    1)
+      if [[ "$1" =~ ^[0-9+$] ]]; then
+        table="$(get_snapshot_table)"
+        names=$(echo "${table}" | sed -n "$1p")
+      else
+        names="$(get_snapshot_table $1)"
+      fi
+      ;;
+    *)
+      table="$(get_snapshot_table $1)"
+      #names=$(echo "${table}" | sed -n "$2p")
+      shift
+      names=""
+      for i in "$@"; do
+        name=$(echo "${table}" | sed -n "${i}p")
+        names="${names}${name}\n"
+      done
+      names=$(echo -e "${names}")
+      ;;
+    
+  esac
+
+    for name in ${names}; do 
+      zfs destroy "${name}"
+      echo "Destroy ${name}"
+    done
+}
+
+create() {
+  if [ -z $2 ]; then
+    rotate_count="12"
+  elif ! [[ "$2" =~ ^[0-9_$] ]]; then
+    usage
+    exit 0
+  else
+    rotate_count=$2
+  fi
+  cur_time="$(get_time)"
+  zfs snapshot "$1@${cur_time}"
+  echo "Snap $1@${cur_time}"
+  
+  table="$(get_snapshot_table $1)"
+  count_lines=$(echo "${table}" $1 | wc -l)
+  if [ "${count_lines}" -gt "${rotate_count}" ]; then
+    delete_count=$((${count_lines} - ${rotate_count}))
+    for i in $(seq 1 "${delete_count}"); do
+      delete $1 1
+    done
+    #for line in ${delete_lines}; do
+    #  zfs destroy "${line}"
+    #  echo "Destroy ${line}"
+    #done
+  fi
+}
+
+zfs_export() {
+  passpharse="112simon"
+
+  case $# in
+    1)
+      id=1
+      table=$(get_snapshot_table $1)
+      export_shot=$(echo "${table}" | sed -n "${id}p")
+      echo "export: ${export_shot}"
+      export_path="/home/hsunhsun/homework/hw3/$"${export_shot}i)"
+      mkdir -p "${export_path}"
+      zfs send ${export_shot} | zstd -z | gpg --batch --passphrase
+      ${passphrase} --decrypt > "${export_path}"
+      ;;
+    *)
+      echo "Not implemented"
+      ;;
+  esac
+}
+
+main() {
+  if [ -z $1 ]; then
+    usage
+    exit 0
+  fi
+
+  case $1 in
+    -l | --list)
+      shift
+      list "$@"
+      ;;
+    -d | --delete)
+      shift
+      delete "$@"
+      ;;
+    -e | --export)
+      shift
+      zfs_export "$@"
+      ;;
+    *)
+      create "$@"
+      ;;
+  esac
+}
+
+main "$@"
+

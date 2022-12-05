@@ -1,0 +1,11 @@
+#!/bin/sh
+
+rm /home/ftp/public/*
+rm /home/ftp/upload/*
+rm /home/ftp/hidden/*
+rm /home/ftp/hidden/.exe/*
+
+zfsbak -d mypool
+zfsbak -d mypool/public
+zfsbak -d mypool/upload
+zfsbak -d mypool/hidden

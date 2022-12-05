@@ -1,0 +1,7 @@
+#!/usr/local/bin/bash
+
+touch file
+echo "aaa" > file
+gpg -r $USER -e file
+
+gpg --batch --passphrase "112simon" --decrypt file.gpg

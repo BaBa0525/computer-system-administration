@@ -1,0 +1,27 @@
+#!/bin/sh
+# vim: filetype=sh
+
+. /etc/rc.subr
+
+name="ftp_watchd"
+rcvar="ftp_watchd_enable"
+pidfile="/var/run/pure-uploadscript.pid"
+
+load_rc_config $name
+
+command="/usr/local/sbin/pure-uploadscript"
+command_args="-B -g 1004 -r /home/hsunhsun/homework/hw3/uploadscript.sh"
+
+stop_cmd="${name}_stop"
+
+ftp_watchd_stop() {
+  pid=$(check_pidfile ${pidfile} ${command})
+  if [ -z ${pid} ]; then
+    echo "${name} not running"
+  else
+    echo "Kill: ${pid}"
+    kill ${pid}
+  fi
+}
+
+run_rc_command $1
